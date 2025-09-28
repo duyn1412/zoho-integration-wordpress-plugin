@@ -1,0 +1,68 @@
+/* Zoho Integration Admin Styles */
+
+.zoho-integration-admin {
+    max-width: 800px;
+}
+
+.zoho-integration-admin .form-table th {
+    width: 200px;
+}
+
+.zoho-integration-admin .form-table input[type="text"] {
+    width: 100%;
+    max-width: 400px;
+}
+
+.zoho-integration-admin .test-section {
+    background: #f9f9f9;
+    padding: 20px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    margin-top: 20px;
+}
+
+.zoho-integration-admin .test-section h2 {
+    margin-top: 0;
+}
+
+.zoho-integration-admin .notice {
+    margin: 10px 0;
+}
+
+.zoho-integration-admin .button {
+    margin-top: 10px;
+}
+
+.zoho-config-section {
+    background: #f9f9f9;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    padding: 20px;
+    margin: 20px 0;
+}
+
+.zoho-config-section h4 {
+    margin-top: 0;
+    color: #0073aa;
+}
+
+.redirect-uri-box {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    margin: 10px 0;
+}
+
+.redirect-uri-box input {
+    flex: 1;
+    font-family: 'Courier New', monospace;
+    font-size: 14px;
+    background: #fff;
+    border: 1px solid #ccc;
+    border-radius: 3px;
+    padding: 8px;
+}
+
+.redirect-uri-box button {
+    white-space: nowrap;
+}
