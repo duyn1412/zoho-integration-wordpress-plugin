@@ -1,0 +1,50 @@
+# WordPress
+wp-config.php
+wp-content/uploads/
+wp-content/blogs.dir/
+wp-content/upgrade/
+wp-content/backup-db/
+wp-content/advanced-cache.php
+wp-content/wp-cache-config.php
+wp-content/cache/
+wp-content/cache/supercache/
+
+# Plugin specific
+*.log
+debug.log
+error_log
+*.tmp
+*.temp
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Dependencies
+node_modules/
+vendor/
+composer.lock
+
+# Build files
+*.zip
+*.tar.gz
+build/
+dist/
+
+# Screenshots (keep structure but ignore actual images)
+assets/screenshots/*.png
+assets/screenshots/*.jpg
+assets/screenshots/*.jpeg
+assets/screenshots/*.gif
