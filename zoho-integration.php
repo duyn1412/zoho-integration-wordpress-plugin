@@ -1,12 +1,22 @@
 <?php
 /**
  * Plugin Name: Zoho Integration
- * Plugin URI: https://canadavapes.com
- * Description: Custom Zoho Campaigns integration for automatic user subscription
+ * Plugin URI: https://wptopd3v.com/zoho-integration
+ * Description: Integrate WooCommerce with Zoho Campaigns for automatic newsletter subscriptions. Features OAuth 2.0 authentication, newsletter checkbox in registration form, and auto-subscribe functionality.
  * Version: 1.1.0
- * Author: Canada Vapes
+ * Author: Wptopd3v
+ * Author URI: https://wptopd3v.com
  * License: GPL v2 or later
+ * License URI: https://www.gnu.org/licenses/gpl-2.0.html
  * Text Domain: zoho-integration
+ * Domain Path: /languages
+ * Requires at least: 5.0
+ * Tested up to: 6.4
+ * Requires PHP: 7.4
+ * WC requires at least: 5.0
+ * WC tested up to: 8.0
+ * Network: false
+ * Tags: woocommerce, zoho, campaigns, newsletter, email marketing, integration, oauth
  */
 
 // Prevent direct access

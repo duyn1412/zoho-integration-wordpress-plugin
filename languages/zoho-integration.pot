@@ -1,0 +1,217 @@
+# Copyright (C) 2025 Wptopd3v
+# This file is distributed under the same license as the Zoho Integration package.
+msgid ""
+msgstr ""
+"Project-Id-Version: Zoho Integration 1.1.0\n"
+"Report-Msgid-Bugs-To: https://wptopd3v.com\n"
+"POT-Creation-Date: 2025-01-28 12:00+0000\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"PO-Revision-Date: 2025-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: LANGUAGE <LL@li.org>\n"
+
+#: zoho-integration.php:5
+msgid "Integrate WooCommerce with Zoho Campaigns for automatic newsletter subscriptions. Features OAuth 2.0 authentication, newsletter checkbox in registration form, and auto-subscribe functionality."
+msgstr ""
+
+#: zoho-integration.php:746
+msgid "I consent to receiving marketing emails from us"
+msgstr ""
+
+#: zoho-integration.php:863
+msgid "Add newsletter subscription checkbox to WooCommerce registration form"
+msgstr ""
+
+#: zoho-integration.php:866
+msgid "When enabled, users will see a pre-checked checkbox during account creation."
+msgstr ""
+
+#: zoho-integration.php:870
+msgid "Text to display next to the newsletter subscription checkbox."
+msgstr ""
+
+#: zoho-integration.php:876
+msgid "Enable debug logging to WordPress debug.log"
+msgstr ""
+
+#: zoho-integration.php:879
+msgid "When enabled, detailed debug information will be logged to help troubleshoot issues."
+msgstr ""
+
+#: zoho-integration.php:884
+msgid "Zoho Integration Settings"
+msgstr ""
+
+#: zoho-integration.php:888
+msgid "Client ID"
+msgstr ""
+
+#: zoho-integration.php:891
+msgid "Client Secret"
+msgstr ""
+
+#: zoho-integration.php:894
+msgid "Select List"
+msgstr ""
+
+#: zoho-integration.php:897
+msgid "-- Select a list --"
+msgstr ""
+
+#: zoho-integration.php:900
+msgid "Refresh Lists"
+msgstr ""
+
+#: zoho-integration.php:901
+msgid "Select the Zoho Campaigns list where users will be subscribed."
+msgstr ""
+
+#: zoho-integration.php:904
+msgid "Debug Information:"
+msgstr ""
+
+#: zoho-integration.php:907
+msgid "Domain"
+msgstr ""
+
+#: zoho-integration.php:910
+msgid ".com"
+msgstr ""
+
+#: zoho-integration.php:911
+msgid ".ca"
+msgstr ""
+
+#: zoho-integration.php:914
+msgid "Enable Registration Checkbox"
+msgstr ""
+
+#: zoho-integration.php:917
+msgid "Checkbox Text"
+msgstr ""
+
+#: zoho-integration.php:920
+msgid "Enable Debug Logging"
+msgstr ""
+
+#: zoho-integration.php:925
+msgid "Save Settings"
+msgstr ""
+
+#: zoho-integration.php:929
+msgid "OAuth Authorization"
+msgstr ""
+
+#: zoho-integration.php:930
+msgid "Click the button below to authorize with Zoho Campaigns. This will open a new window for OAuth authorization."
+msgstr ""
+
+#: zoho-integration.php:931
+msgid "Authorize with Zoho"
+msgstr ""
+
+#: zoho-integration.php:934
+msgid "Zoho App Configuration"
+msgstr ""
+
+#: zoho-integration.php:935
+msgid "1. Redirect URI to add in Zoho App:"
+msgstr ""
+
+#: zoho-integration.php:938
+msgid "Copy Redirect URI"
+msgstr ""
+
+#: zoho-integration.php:939
+msgid "Copy this URL and paste it in your Zoho app's \"Redirect URI\" field."
+msgstr ""
+
+#: zoho-integration.php:942
+msgid "2. Debug Information:"
+msgstr ""
+
+#: zoho-integration.php:943
+msgid "Current Domain:"
+msgstr ""
+
+#: zoho-integration.php:944
+msgid "Redirect URI:"
+msgstr ""
+
+#: zoho-integration.php:945
+msgid "Debug Logging:"
+msgstr ""
+
+#: zoho-integration.php:946
+msgid "Enabled"
+msgstr ""
+
+#: zoho-integration.php:947
+msgid "Disabled"
+msgstr ""
+
+#: zoho-integration.php:948
+msgid "Encoded URI:"
+msgstr ""
+
+#: zoho-integration.php:952
+msgid "Debug Information section is hidden."
+msgstr ""
+
+#: zoho-integration.php:953
+msgid "Enable \"Debug Logging\" in the settings above to view debug information."
+msgstr ""
+
+#: zoho-integration.php:958
+msgid "Test Integration section is hidden."
+msgstr ""
+
+#: zoho-integration.php:959
+msgid "Enable \"Debug Logging\" in the settings above to access test functionality."
+msgstr ""
+
+#: zoho-integration.php:964
+msgid "Test Integration"
+msgstr ""
+
+#: zoho-integration.php:967
+msgid "Test User ID:"
+msgstr ""
+
+#: zoho-integration.php:968
+msgid "Enter a user ID to test the integration."
+msgstr ""
+
+#: zoho-integration.php:970
+msgid "Test Add User"
+msgstr ""
+
+#: zoho-integration.php:975
+msgid "Test completed. Check debug logs for details."
+msgstr ""
+
+#: zoho-integration.php:978
+msgid "Settings saved!"
+msgstr ""
+
+#: zoho-integration.php:981
+msgid "Authorization successful"
+msgstr ""
+
+#: zoho-integration.php:984
+msgid "Authorization failed. Please try again."
+msgstr ""
+
+#: zoho-integration.php:987
+msgid "No access token. Please authorize with Zoho first."
+msgstr ""
+
+#: zoho-integration.php:990
+msgid "Failed to retrieve lists. Check debug log for details."
+msgstr ""
+
+#: zoho-integration.php:993
+msgid "Security check failed"
+msgstr ""

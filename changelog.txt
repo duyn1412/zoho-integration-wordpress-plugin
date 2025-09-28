@@ -1,0 +1,13 @@
+= 1.1.0 =
+* Initial release
+* OAuth 2.0 authentication with Zoho Campaigns
+* WooCommerce integration for automatic user subscription
+* Newsletter checkbox in WooCommerce registration form
+* Admin dashboard with comprehensive settings
+* Debug logging with toggle option
+* Canada data center support (zohocloud.ca)
+* AJAX-powered list management
+* Customizable checkbox text
+* Secure API integration
+* Error handling and validation
+* Multi-language support ready
