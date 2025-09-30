@@ -83,7 +83,7 @@ class ZohoIntegration {
             $screen = get_current_screen();
             if ($screen && $screen->id === 'settings_page_zoho-integration') {
                 echo '<div class="notice notice-success is-dismissible">';
-                echo '<p><strong>CheckoutWC Detected!</strong> Your newsletter checkbox will be automatically styled to match CheckoutWC\'s design. The checkbox will appear after customer info account details using the <code>cfw_after_customer_info_account_details</code> hook.</p>';
+                echo '<p><strong>CheckoutWC Detected!</strong> Your newsletter checkbox will be automatically styled to match CheckoutWC\'s design. The checkbox will appear after customer info account details using the <code>cfw_after_customer_info_account_details</code> hook. <strong>Note:</strong> Checkbox only shows for non-logged in users and only new users will be added to Zoho list.</p>';
                 echo '</div>';
             }
         }
@@ -274,7 +274,7 @@ class ZohoIntegration {
     }
     
     /**
-     * Checkout subscribe user
+     * Checkout subscribe user - only for new users
      */
     public function checkout_subscribe_user($order_id) {
         $order = wc_get_order($order_id);
@@ -285,24 +285,31 @@ class ZohoIntegration {
         
         $this->debug_log('checkout_subscribe_user called for user ID: ' . $customer_id);
         
+        // Check if this is a new user (created during this checkout)
+        $user = get_user_by('id', $customer_id);
+        if (!$user) return;
+        
+        // Check if user was created recently (within last 5 minutes)
+        $user_created = strtotime($user->user_registered);
+        $current_time = time();
+        $is_new_user = (($current_time - $user_created) < 300); // 5 minutes
+        
+        if (!$is_new_user) {
+            $this->debug_log('User is not new, skipping Zoho subscription');
+            return;
+        }
+        
         // Check if user opted in for newsletter from checkout checkbox
         $newsletter_subscription = WC()->session->get('zoho_newsletter_subscription');
         if ($newsletter_subscription == '1') {
             update_user_meta($customer_id, 'zoho_newsletter_subscription', true);
-            $this->debug_log('User opted in for newsletter during checkout');
+            $this->debug_log('New user opted in for newsletter during checkout');
             $this->add_user_to_zoho_list($customer_id);
             
             // Clear session data
             WC()->session->set('zoho_newsletter_subscription', null);
         } else {
-            // Check existing user meta (in case checkbox was saved earlier)
-            $existing_subscription = get_user_meta($customer_id, 'zoho_newsletter_subscription', true);
-            if ($existing_subscription) {
-                $this->debug_log('User has existing newsletter subscription preference');
-                $this->add_user_to_zoho_list($customer_id);
-            } else {
-                $this->debug_log('User did not opt in for newsletter during checkout');
-            }
+            $this->debug_log('New user did not opt in for newsletter during checkout');
         }
     }
     
@@ -905,6 +912,11 @@ class ZohoIntegration {
             return;
         }
         
+        // Only show checkbox for non-logged in users
+        if (is_user_logged_in()) {
+            return;
+        }
+        
         // Prevent duplicate display
         static $checkbox_displayed = false;
         if ($checkbox_displayed) {
@@ -925,7 +937,7 @@ class ZohoIntegration {
         if ($is_cfw_hook) {
             // CheckoutWC specific styling
             ?>
-            <div class="<?php echo esc_attr($container_class); ?>" style="margin: 20px 0; padding: 20px; background: rgba(255, 255, 255, 0.9); border: 1px solid #d1d5db; border-radius: 12px; box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);">
+            <div class="<?php echo esc_attr($container_class); ?>" style="margin: 20px 0;">
                 <p class="form-row form-row-wide" style="margin: 0;">
                     <label class="woocommerce-form__label woocommerce-form__label-for-checkbox woocommerce-form__label-for-checkbox-inline" style="display: flex; align-items: center; gap: 12px; font-weight: 500; margin: 0; cursor: pointer;">
                         <input class="woocommerce-form__input woocommerce-form__input-checkbox" type="checkbox" name="zoho_newsletter_subscription" value="1" checked style="margin: 0; transform: scale(1.2); accent-color: #3b82f6;" />
@@ -1130,7 +1142,7 @@ function zoho_integration_admin_page() {
                             <input type="checkbox" name="enable_checkout_checkbox" value="1" <?php checked($settings['enable_checkout_checkbox'] ?? 0, 1); ?> />
                             Add newsletter subscription checkbox to WooCommerce checkout page
                         </label>
-                        <p class="description">When enabled, users will see a pre-checked checkbox during checkout process.</p>
+                        <p class="description">When enabled, users will see a pre-checked checkbox during checkout process. <strong>Note:</strong> Checkbox only appears for non-logged in users and only new users will be added to Zoho list.</p>
                     </td>
                 </tr>
                 <tr>
