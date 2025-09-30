@@ -48,6 +48,10 @@ class ZohoIntegration {
         // Add checkbox to registration form
         add_action('woocommerce_register_form', array($this, 'add_registration_checkbox'));
         add_action('woocommerce_created_customer', array($this, 'save_registration_checkbox'), 5, 3);
+        
+        // Add newsletter checkbox to checkout page
+        add_action('woocommerce_checkout_billing', array($this, 'add_checkout_checkbox'));
+        add_action('woocommerce_checkout_process', array($this, 'save_checkout_checkbox'));
     }
     
     public function init() {
@@ -252,12 +256,26 @@ class ZohoIntegration {
         $customer_id = $order->get_customer_id();
         if (!$customer_id) return;
         
-        error_log('[ZOHO_INTEGRATION] checkout_subscribe_user called for user ID: ' . $customer_id);
+        $this->debug_log('checkout_subscribe_user called for user ID: ' . $customer_id);
         
-        // Check if user opted in for newsletter
-        if (isset($_POST['zc_optin_checkbox']) && $_POST['zc_optin_checkbox'] == 'on') {
+        // Check if user opted in for newsletter from checkout checkbox
+        $newsletter_subscription = WC()->session->get('zoho_newsletter_subscription');
+        if ($newsletter_subscription == '1') {
             update_user_meta($customer_id, 'zoho_newsletter_subscription', true);
+            $this->debug_log('User opted in for newsletter during checkout');
             $this->add_user_to_zoho_list($customer_id);
+            
+            // Clear session data
+            WC()->session->set('zoho_newsletter_subscription', null);
+        } else {
+            // Check existing user meta (in case checkbox was saved earlier)
+            $existing_subscription = get_user_meta($customer_id, 'zoho_newsletter_subscription', true);
+            if ($existing_subscription) {
+                $this->debug_log('User has existing newsletter subscription preference');
+                $this->add_user_to_zoho_list($customer_id);
+            } else {
+                $this->debug_log('User did not opt in for newsletter during checkout');
+            }
         }
     }
     
@@ -780,15 +798,47 @@ class ZohoIntegration {
     }
     
     /**
+     * Add newsletter subscription checkbox to WooCommerce checkout page
+     */
+    public function add_checkout_checkbox() {
+        $settings = get_option('zoho_integration_settings', array());
+        
+        if (!isset($settings['enable_checkout_checkbox']) || !$settings['enable_checkout_checkbox']) {
+            return;
+        }
+        
+        $checkbox_text = isset($settings['checkbox_text']) ? $settings['checkbox_text'] : 'I consent to receiving marketing emails from us';
+        ?>
+        <p class="form-row form-row-wide">
+            <label class="woocommerce-form__label woocommerce-form__label-for-checkbox woocommerce-form__label-for-checkbox-inline">
+                <input class="woocommerce-form__input woocommerce-form__input-checkbox" type="checkbox" name="zoho_newsletter_subscription" value="1" checked />
+                <span><?php echo esc_html($checkbox_text); ?></span>
+            </label>
+        </p>
+        <?php
+    }
+    
+    /**
      * Save registration checkbox value
      */
     public function save_registration_checkbox($customer_id, $new_customer_data, $password_generated) {
         if (isset($_POST['zoho_newsletter_subscription']) && $_POST['zoho_newsletter_subscription'] == '1') {
             update_user_meta($customer_id, 'zoho_newsletter_subscription', true);
-            error_log('[ZOHO_INTEGRATION] User ' . $customer_id . ' opted in for newsletter during registration');
+            $this->debug_log('User ' . $customer_id . ' opted in for newsletter during registration');
         } else {
             update_user_meta($customer_id, 'zoho_newsletter_subscription', false);
-            error_log('[ZOHO_INTEGRATION] User ' . $customer_id . ' opted out for newsletter during registration');
+            $this->debug_log('User ' . $customer_id . ' opted out for newsletter during registration');
+        }
+    }
+    
+    /**
+     * Save checkout checkbox value
+     */
+    public function save_checkout_checkbox() {
+        if (isset($_POST['zoho_newsletter_subscription']) && $_POST['zoho_newsletter_subscription'] == '1') {
+            // Store in session to be processed after order creation
+            WC()->session->set('zoho_newsletter_subscription', '1');
+            $this->debug_log('Newsletter subscription checkbox checked during checkout');
         }
     }
     
@@ -835,6 +885,7 @@ function zoho_integration_admin_page() {
             'client_id' => sanitize_text_field($_POST['client_id']),
             'client_secret' => sanitize_text_field($_POST['client_secret']),
             'enable_registration_checkbox' => isset($_POST['enable_registration_checkbox']) ? 1 : 0,
+            'enable_checkout_checkbox' => isset($_POST['enable_checkout_checkbox']) ? 1 : 0,
             'checkbox_text' => sanitize_text_field($_POST['checkbox_text']),
             'enable_debug' => isset($_POST['enable_debug']) ? 1 : 0
         );
@@ -939,6 +990,16 @@ function zoho_integration_admin_page() {
                             Add newsletter subscription checkbox to WooCommerce registration form
                         </label>
                         <p class="description">When enabled, users will see a pre-checked checkbox during account creation.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <th scope="row">Enable Checkout Checkbox</th>
+                    <td>
+                        <label>
+                            <input type="checkbox" name="enable_checkout_checkbox" value="1" <?php checked($settings['enable_checkout_checkbox'] ?? 0, 1); ?> />
+                            Add newsletter subscription checkbox to WooCommerce checkout page
+                        </label>
+                        <p class="description">When enabled, users will see a pre-checked checkbox during checkout process.</p>
                     </td>
                 </tr>
                 <tr>
