@@ -52,6 +52,13 @@ class ZohoIntegration {
         // Add newsletter checkbox to checkout page
         add_action('woocommerce_checkout_billing', array($this, 'add_checkout_checkbox'));
         add_action('woocommerce_checkout_process', array($this, 'save_checkout_checkbox'));
+        
+        // CheckoutWC compatibility - add checkbox to additional fields
+        add_action('woocommerce_after_checkout_billing_form', array($this, 'add_checkout_checkbox'));
+        add_action('woocommerce_checkout_after_customer_details', array($this, 'add_checkout_checkbox'));
+        
+        // Enqueue frontend styles
+        add_action('wp_enqueue_scripts', array($this, 'enqueue_frontend_styles'));
     }
     
     public function init() {
@@ -60,6 +67,23 @@ class ZohoIntegration {
         
         // Add AJAX handlers
         add_action('wp_ajax_get_zoho_lists', array($this, 'ajax_get_zoho_lists'));
+        
+        // Add admin notice for CheckoutWC compatibility
+        add_action('admin_notices', array($this, 'checkoutwc_compatibility_notice'));
+    }
+    
+    /**
+     * Show CheckoutWC compatibility notice
+     */
+    public function checkoutwc_compatibility_notice() {
+        if ($this->is_checkoutwc_active() && current_user_can('manage_options')) {
+            $screen = get_current_screen();
+            if ($screen && $screen->id === 'settings_page_zoho-integration') {
+                echo '<div class="notice notice-info is-dismissible">';
+                echo '<p><strong>CheckoutWC Detected!</strong> Your newsletter checkbox will be automatically styled to match CheckoutWC\'s design. The checkbox will appear in the billing section of your checkout page.</p>';
+                echo '</div>';
+            }
+        }
     }
     
     /**
@@ -798,6 +822,77 @@ class ZohoIntegration {
     }
     
     /**
+     * Enqueue frontend styles for CheckoutWC compatibility
+     */
+    public function enqueue_frontend_styles() {
+        if (is_checkout() || is_account_page()) {
+            wp_add_inline_style('woocommerce-general', '
+                .zoho-newsletter-checkbox {
+                    background: #f8f9fa;
+                    border: 1px solid #e9ecef;
+                    border-radius: 8px;
+                    padding: 15px;
+                    margin: 15px 0;
+                }
+                .zoho-newsletter-checkbox label {
+                    display: flex !important;
+                    align-items: center !important;
+                    gap: 8px !important;
+                    font-weight: 500 !important;
+                    margin: 0 !important;
+                    cursor: pointer;
+                }
+                .zoho-newsletter-checkbox input[type="checkbox"] {
+                    margin: 0 !important;
+                    transform: scale(1.1);
+                }
+                .zoho-newsletter-checkbox span {
+                    color: #495057;
+                    line-height: 1.4;
+                }
+                /* CheckoutWC specific styles */
+                .cfw-checkout .zoho-newsletter-checkbox,
+                .zoho-newsletter-checkbox.cfw-compatible {
+                    background: rgba(255, 255, 255, 0.9);
+                    border: 1px solid #d1d5db;
+                    border-radius: 12px;
+                    padding: 20px;
+                    margin: 20px 0;
+                    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+                }
+                .cfw-checkout .zoho-newsletter-checkbox label,
+                .zoho-newsletter-checkbox.cfw-compatible label {
+                    color: #374151;
+                    font-size: 14px;
+                    line-height: 1.5;
+                }
+                .cfw-checkout .zoho-newsletter-checkbox input[type="checkbox"],
+                .zoho-newsletter-checkbox.cfw-compatible input[type="checkbox"] {
+                    transform: scale(1.2);
+                    accent-color: #3b82f6;
+                }
+                /* CheckoutWC dark mode support */
+                .cfw-checkout.dark .zoho-newsletter-checkbox,
+                .zoho-newsletter-checkbox.cfw-compatible.dark {
+                    background: rgba(31, 41, 55, 0.8);
+                    border-color: #4b5563;
+                }
+                .cfw-checkout.dark .zoho-newsletter-checkbox label,
+                .zoho-newsletter-checkbox.cfw-compatible.dark label {
+                    color: #f3f4f6;
+                }
+            ');
+        }
+    }
+    
+    /**
+     * Check if CheckoutWC is active
+     */
+    private function is_checkoutwc_active() {
+        return class_exists('CheckoutWC') || function_exists('cfw_get_checkout_url');
+    }
+    
+    /**
      * Add newsletter subscription checkbox to WooCommerce checkout page
      */
     public function add_checkout_checkbox() {
@@ -807,14 +902,27 @@ class ZohoIntegration {
             return;
         }
         
+        // Prevent duplicate display
+        static $checkbox_displayed = false;
+        if ($checkbox_displayed) {
+            return;
+        }
+        $checkbox_displayed = true;
+        
         $checkbox_text = isset($settings['checkbox_text']) ? $settings['checkbox_text'] : 'I consent to receiving marketing emails from us';
+        $is_checkoutwc = $this->is_checkoutwc_active();
+        
+        // Different styling for CheckoutWC vs standard WooCommerce
+        $container_class = $is_checkoutwc ? 'zoho-newsletter-checkbox cfw-compatible' : 'zoho-newsletter-checkbox';
         ?>
-        <p class="form-row form-row-wide">
-            <label class="woocommerce-form__label woocommerce-form__label-for-checkbox woocommerce-form__label-for-checkbox-inline">
-                <input class="woocommerce-form__input woocommerce-form__input-checkbox" type="checkbox" name="zoho_newsletter_subscription" value="1" checked />
-                <span><?php echo esc_html($checkbox_text); ?></span>
-            </label>
-        </p>
+        <div class="<?php echo esc_attr($container_class); ?>" style="margin: 15px 0;">
+            <p class="form-row form-row-wide">
+                <label class="woocommerce-form__label woocommerce-form__label-for-checkbox woocommerce-form__label-for-checkbox-inline" style="display: flex; align-items: center; gap: 8px; font-weight: 500;">
+                    <input class="woocommerce-form__input woocommerce-form__input-checkbox" type="checkbox" name="zoho_newsletter_subscription" value="1" checked style="margin: 0;" />
+                    <span><?php echo esc_html($checkbox_text); ?></span>
+                </label>
+            </p>
+        </div>
         <?php
     }
     
