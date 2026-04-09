@@ -36,8 +36,17 @@ define('ZOHO_ACCOUNTS_URL_CA', 'https://accounts.zoho.ca/oauth/v2/');
 
 class ZohoIntegration {
     
-    private $client_id = '1000.8A8C5537F06D2AA'; // Replace with your actual client ID
-    private $client_secret = 'your_client_secret_here'; // Replace with your actual client secret
+    private static $instance = null;
+    
+    /**
+     * Get singleton instance (avoids duplicate hook registration)
+     */
+    public static function get_instance() {
+        if (self::$instance === null) {
+            self::$instance = new self();
+        }
+        return self::$instance;
+    }
     
     public function __construct() {
         add_action('init', array($this, 'init'));
@@ -143,18 +152,17 @@ class ZohoIntegration {
         // Check if this is our OAuth callback
         if (isset($_GET['code']) && isset($_GET['state']) && $_GET['state'] == 'zoho_oauth') {
             $code = sanitize_text_field($_GET['code']);
-            error_log('[ZOHO_INTEGRATION] OAuth callback received. Code: ' . substr($code, 0, 20) . '...');
-            error_log('[ZOHO_INTEGRATION] State: ' . $_GET['state']);
+            $this->debug_log('OAuth callback received. Code: ' . substr($code, 0, 20) . '...');
             
             $result = $this->handle_authorization_callback($code);
             
             if ($result) {
-                error_log('[ZOHO_INTEGRATION] Authorization successful');
+                $this->debug_log('Authorization successful');
                 // Redirect to admin page with success message
                 wp_redirect(admin_url('options-general.php?page=zoho-integration&oauth=success'));
                 exit;
             } else {
-                error_log('[ZOHO_INTEGRATION] Authorization failed');
+                $this->debug_log('Authorization failed');
                 // Redirect to admin page with error message
                 wp_redirect(admin_url('options-general.php?page=zoho-integration&oauth=error'));
                 exit;
@@ -168,9 +176,9 @@ class ZohoIntegration {
     private function get_valid_access_token() {
         $token_data = get_option('zoho_token_data', array());
         
-        error_log('[ZOHO_INTEGRATION] Current token data: ' . print_r($token_data, true));
+        $this->debug_log('Checking access token validity');
         if (isset($token_data['scope'])) {
-            error_log('[ZOHO_INTEGRATION] Current scope: ' . $token_data['scope']);
+            $this->debug_log('Current scope: ' . $token_data['scope']);
         }
         
         if (empty($token_data['access_token'])) {
@@ -183,7 +191,7 @@ class ZohoIntegration {
         $token_time = isset($token_data['req_time']) ? $token_data['req_time'] : 0;
         
         if (($current_time - $token_time) >= 3600) {
-            error_log('[ZOHO_INTEGRATION] Access token expired, refreshing...');
+            $this->debug_log('Access token expired, refreshing...');
             return $this->refresh_access_token($token_data['refresh_token']);
         }
         
@@ -194,20 +202,14 @@ class ZohoIntegration {
      * Refresh access token using refresh token
      */
     private function refresh_access_token($refresh_token) {
+        $accounts_url = $this->get_accounts_url() . 'token';
         $zoho_settings = get_option('zoho_integration_settings', array());
-        $domain = isset($zoho_settings['domain']) ? $zoho_settings['domain'] : 'com';
-        
-        // Use correct Zoho Accounts URL format based on web search
-        $accounts_url = 'https://accounts.zohocloud.ca/oauth/v2/token';
-        if ($domain == 'ca') {
-            $accounts_url = 'https://accounts.zohocloud.ca/oauth/v2/token';
-        }
         
         $client_id = isset($zoho_settings['client_id']) ? $zoho_settings['client_id'] : '';
         $client_secret = isset($zoho_settings['client_secret']) ? $zoho_settings['client_secret'] : '';
         
-        error_log('[ZOHO_INTEGRATION] Refresh token - Client ID: ' . ($client_id ? substr($client_id, 0, 10) . '...' : 'EMPTY'));
-        error_log('[ZOHO_INTEGRATION] Refresh token - Client Secret: ' . ($client_secret ? substr($client_secret, 0, 10) . '...' : 'EMPTY'));
+        $this->debug_log('Refresh token - Client ID: ' . ($client_id ? substr($client_id, 0, 10) . '...' : 'EMPTY'));
+        $this->debug_log('Refresh token URL: ' . $accounts_url);
         
         $refresh_params = array(
             'client_id' => $client_id,
@@ -215,8 +217,6 @@ class ZohoIntegration {
             'grant_type' => 'refresh_token',
             'refresh_token' => $refresh_token
         );
-        
-        error_log('[ZOHO_INTEGRATION] Refresh token URL: ' . $accounts_url);
         
         $response = wp_remote_post($accounts_url, array(
             'method' => 'POST',
@@ -228,7 +228,7 @@ class ZohoIntegration {
         ));
         
         if (is_wp_error($response)) {
-            error_log('[ZOHO_INTEGRATION] Refresh token error: ' . $response->get_error_message());
+            $this->debug_log('Refresh token error: ' . $response->get_error_message());
             return false;
         }
         
@@ -241,12 +241,12 @@ class ZohoIntegration {
                 $token_data['req_time'] = time();
                 $token_data['refresh_token'] = $refresh_token; // Keep the refresh token
                 update_option('zoho_token_data', $token_data);
-                error_log('[ZOHO_INTEGRATION] Access token refreshed successfully');
+                $this->debug_log('Access token refreshed successfully');
                 return $token_data['access_token'];
             }
         }
         
-        error_log('[ZOHO_INTEGRATION] Failed to refresh access token: ' . $response_body);
+        $this->debug_log('Failed to refresh access token: ' . $response_body);
         return false;
     }
     
@@ -254,21 +254,21 @@ class ZohoIntegration {
      * Auto subscribe user when they register
      */
     public function auto_subscribe_user($customer_id, $new_customer_data, $password_generated) {
-        error_log('[ZOHO_INTEGRATION] auto_subscribe_user called for user ID: ' . $customer_id);
+        $this->debug_log('auto_subscribe_user called for user ID: ' . $customer_id);
         
         // Check if user opted in for newsletter (from registration form)
         if (isset($_POST['zoho_newsletter_subscription']) && $_POST['zoho_newsletter_subscription'] == '1') {
             update_user_meta($customer_id, 'zoho_newsletter_subscription', true);
-            error_log('[ZOHO_INTEGRATION] User opted in for newsletter during registration');
+            $this->debug_log('User opted in for newsletter during registration');
             $this->add_user_to_zoho_list($customer_id);
         } else {
             // Check existing user meta (in case checkbox was saved earlier)
             $newsletter_subscription = get_user_meta($customer_id, 'zoho_newsletter_subscription', true);
             if ($newsletter_subscription) {
-                error_log('[ZOHO_INTEGRATION] User has existing newsletter subscription preference');
+                $this->debug_log('User has existing newsletter subscription preference');
                 $this->add_user_to_zoho_list($customer_id);
             } else {
-                error_log('[ZOHO_INTEGRATION] User did not opt in for newsletter');
+                $this->debug_log('User did not opt in for newsletter');
             }
         }
     }
@@ -319,16 +319,12 @@ class ZohoIntegration {
     public function get_zoho_lists() {
         $access_token = $this->get_valid_access_token();
         if (!$access_token) {
-            error_log('[ZOHO_INTEGRATION] No valid access token for getting lists');
+            $this->debug_log('No valid access token for getting lists');
             return false;
         }
         
-        $zoho_settings = get_option('zoho_integration_settings', array());
-        $domain = isset($zoho_settings['domain']) ? $zoho_settings['domain'] : 'com';
-        
-        // Use correct Zoho Campaigns URL format - force Canada data center
-        $campaigns_url = 'https://campaigns.zohocloud.ca';
-        error_log('[ZOHO_INTEGRATION] Using Canada data center: ' . $campaigns_url);
+        $campaigns_url = $this->get_campaigns_url();
+        $this->debug_log('Using campaigns URL: ' . $campaigns_url);
         
         // Use the correct endpoint according to Zoho documentation
         $endpoints_to_try = array(
@@ -336,7 +332,7 @@ class ZohoIntegration {
         );
         
         $api_url = $campaigns_url . $endpoints_to_try[0];
-        error_log('[ZOHO_INTEGRATION] Trying endpoint: ' . $api_url);
+        $this->debug_log('Trying endpoint: ' . $api_url);
         
         $headers = array(
             'Authorization' => 'Zoho-oauthtoken ' . $access_token,
@@ -359,103 +355,127 @@ class ZohoIntegration {
         ));
         
         if (is_wp_error($response)) {
-            error_log('[ZOHO_INTEGRATION] Get lists API request failed: ' . $response->get_error_message());
+            $this->debug_log('Get lists API request failed: ' . $response->get_error_message());
             return false;
         }
         
         $response_code = wp_remote_retrieve_response_code($response);
         $response_body = wp_remote_retrieve_body($response);
         
-        error_log('[ZOHO_INTEGRATION] Get lists API response code: ' . $response_code);
-        error_log('[ZOHO_INTEGRATION] Get lists API response body: ' . $response_body);
+        $this->debug_log('Get lists API response code: ' . $response_code);
+        $this->debug_log('Get lists API response body: ' . $response_body);
         
-        if ($response_code == 200) {
-            $response_data = json_decode($response_body, true);
-            
-            // Check for getmailinglists format
-            if (isset($response_data['list_of_details']) && is_array($response_data['list_of_details'])) {
-                error_log('[ZOHO_INTEGRATION] Lists retrieved successfully from getmailinglists');
-                // Convert format to match expected structure
-                $lists = array();
-                foreach ($response_data['list_of_details'] as $list) {
-                    $lists[] = array(
-                        'listkey' => $list['listkey'] ?? '',
-                        'listname' => $list['listname'] ?? ''
-                    );
-                }
-                return $lists;
-            }
-            
-            // Check for other list formats
-            if (isset($response_data['lists']) && is_array($response_data['lists'])) {
-                error_log('[ZOHO_INTEGRATION] Lists retrieved successfully from lists');
-                $lists = array();
-                foreach ($response_data['lists'] as $list) {
-                    $lists[] = array(
-                        'listkey' => $list['listkey'] ?? $list['id'] ?? '',
-                        'listname' => $list['listname'] ?? $list['name'] ?? ''
-                    );
-                }
-                return $lists;
-            }
-            
-            // Check for getlistadvanceddetails format (with listkey)
-            if (isset($response_data['list_details'])) {
-                error_log('[ZOHO_INTEGRATION] Lists retrieved successfully from getlistadvanceddetails');
-                // Convert format to match expected structure
-                $lists = array();
-                if (isset($response_data['list_details']['listname'])) {
-                    $lists[] = array(
-                        'listkey' => $listkey ?? '', // Use the listkey we used
-                        'listname' => $response_data['list_details']['listname']
-                    );
-                }
-                return $lists;
-            }
-            
-            // Check for new emailapi/v2/recipients format
-            if (isset($response_data['data']) && is_array($response_data['data'])) {
-                error_log('[ZOHO_INTEGRATION] Lists retrieved successfully from emailapi/v2/recipients');
-                // Convert format to match expected structure
-                $lists = array();
-                foreach ($response_data['data'] as $list) {
-                    $lists[] = array(
-                        'listkey' => $list['id'],
-                        'listname' => $list['name']
-                    );
-                }
-                return $lists;
-            }
-            
-            // Check old API format
-            if (isset($response_data['code']) && $response_data['code'] == '0') {
-                // Check different response structures
-                if (isset($response_data['list_of_details'])) {
-                    error_log('[ZOHO_INTEGRATION] Lists retrieved successfully from list_of_details');
-                    return $response_data['list_of_details'];
-                } elseif (isset($response_data['lists'])) {
-                    error_log('[ZOHO_INTEGRATION] Lists retrieved successfully from lists');
-                    return $response_data['lists'];
-                } elseif (isset($response_data['list_details'])) {
-                    error_log('[ZOHO_INTEGRATION] Lists retrieved successfully from list_details');
-                    return $response_data['list_details'];
-                } else {
-                    error_log('[ZOHO_INTEGRATION] Success response but no lists found. Response structure: ' . print_r($response_data, true));
-                    // Try next endpoint
-                    return $this->try_alternative_endpoints($campaigns_url, $access_token, $endpoints_to_try, 1);
-                }
-            } else {
-                error_log('[ZOHO_INTEGRATION] Failed to get lists: ' . (isset($response_data['message']) ? $response_data['message'] : 'Unknown error'));
-                // Try next endpoint
-                return $this->try_alternative_endpoints($campaigns_url, $access_token, $endpoints_to_try, 1);
-            }
-        } else {
-            error_log('[ZOHO_INTEGRATION] HTTP error ' . $response_code . '. Trying next endpoint.');
-            // Try next endpoint
+        if ($response_code != 200) {
+            $this->debug_log('HTTP error ' . $response_code . '. Trying next endpoint.');
             return $this->try_alternative_endpoints($campaigns_url, $access_token, $endpoints_to_try, 1);
         }
         
-        return false;
+        $response_data = json_decode($response_body, true);
+        
+        // Check for getmailinglists format
+        if (isset($response_data['list_of_details']) && is_array($response_data['list_of_details'])) {
+            $this->debug_log('Lists retrieved successfully from getmailinglists');
+            $lists = array();
+            foreach ($response_data['list_of_details'] as $list) {
+                $lists[] = array(
+                    'listkey' => $list['listkey'] ?? '',
+                    'listname' => $list['listname'] ?? ''
+                );
+            }
+            return $lists;
+        }
+        
+        // Check for other list formats
+        if (isset($response_data['lists']) && is_array($response_data['lists'])) {
+            $this->debug_log('Lists retrieved successfully from lists');
+            $lists = array();
+            foreach ($response_data['lists'] as $list) {
+                $lists[] = array(
+                    'listkey' => $list['listkey'] ?? $list['id'] ?? '',
+                    'listname' => $list['listname'] ?? $list['name'] ?? ''
+                );
+            }
+            return $lists;
+        }
+        
+        // Check for getlistadvanceddetails format (with listkey)
+        if (isset($response_data['list_details'])) {
+            $this->debug_log('Lists retrieved successfully from getlistadvanceddetails');
+            $lists = array();
+            if (isset($response_data['list_details']['listname'])) {
+                $lists[] = array(
+                    'listkey' => isset($response_data['list_details']['listkey']) ? $response_data['list_details']['listkey'] : '',
+                    'listname' => $response_data['list_details']['listname']
+                );
+            }
+            return $lists;
+        }
+        
+        // Check for new emailapi/v2/recipients format
+        if (isset($response_data['data']) && is_array($response_data['data'])) {
+            $this->debug_log('Lists retrieved successfully from emailapi/v2/recipients');
+            $lists = array();
+            foreach ($response_data['data'] as $list) {
+                $lists[] = array(
+                    'listkey' => $list['id'],
+                    'listname' => $list['name']
+                );
+            }
+            return $lists;
+        }
+        
+        // Check old API format
+        if (isset($response_data['code']) && $response_data['code'] == '0') {
+            if (isset($response_data['list_of_details'])) {
+                $this->debug_log('Lists retrieved successfully from list_of_details');
+                return $response_data['list_of_details'];
+            } elseif (isset($response_data['lists'])) {
+                $this->debug_log('Lists retrieved successfully from lists');
+                return $response_data['lists'];
+            } elseif (isset($response_data['list_details'])) {
+                $this->debug_log('Lists retrieved successfully from list_details');
+                return $response_data['list_details'];
+            } else {
+                $this->debug_log('Success response but no lists found. Response structure: ' . print_r($response_data, true));
+                return $this->try_alternative_endpoints($campaigns_url, $access_token, $endpoints_to_try, 1);
+            }
+        }
+        
+        $this->debug_log('Failed to get lists: ' . (isset($response_data['message']) ? $response_data['message'] : 'Unknown error'));
+        return $this->try_alternative_endpoints($campaigns_url, $access_token, $endpoints_to_try, 1);
+    }
+    
+    /**
+     * Get Zoho Accounts OAuth URL based on domain setting
+     */
+    private function get_accounts_url() {
+        $zoho_settings = get_option('zoho_integration_settings', array());
+        $domain = isset($zoho_settings['domain']) ? $zoho_settings['domain'] : 'com';
+        
+        if ($domain === 'ca') {
+            return 'https://accounts.zohocloud.ca/oauth/v2/';
+        }
+        return 'https://accounts.zoho.com/oauth/v2/';
+    }
+    
+    /**
+     * Get Zoho Campaigns base URL based on domain setting
+     */
+    private function get_campaigns_url() {
+        $zoho_settings = get_option('zoho_integration_settings', array());
+        $domain = isset($zoho_settings['domain']) ? $zoho_settings['domain'] : 'com';
+        
+        if ($domain === 'ca') {
+            return 'https://campaigns.zohocloud.ca';
+        }
+        return 'https://campaigns.zoho.com';
+    }
+    
+    /**
+     * Get Zoho API base URL based on domain setting
+     */
+    private function get_api_base_url() {
+        return $this->get_campaigns_url() . '/api/v1.1/';
     }
     
     /**
@@ -493,7 +513,6 @@ class ZohoIntegration {
         
         if ($response_code == 200) {
             $response_data = json_decode($response_body, true);
-            // Check if response is successful (not error 1003 or 2402)
             if (isset($response_data['code']) && $response_data['code'] == '0') {
                 return true;
             }
@@ -506,9 +525,8 @@ class ZohoIntegration {
      * Create a default list if none exists
      */
     private function create_default_list($access_token, $campaigns_url) {
-        error_log('[ZOHO_INTEGRATION] Attempting to create default list');
+        $this->debug_log('Attempting to create default list');
         
-        // Try to create a list using Zoho API
         $create_url = $campaigns_url . '/api/v1.1/createlist';
         
         $headers = array(
@@ -532,25 +550,25 @@ class ZohoIntegration {
         ));
         
         if (is_wp_error($response)) {
-            error_log('[ZOHO_INTEGRATION] Create list request failed: ' . $response->get_error_message());
+            $this->debug_log('Create list request failed: ' . $response->get_error_message());
             return false;
         }
         
         $response_code = wp_remote_retrieve_response_code($response);
         $response_body = wp_remote_retrieve_body($response);
         
-        error_log('[ZOHO_INTEGRATION] Create list response code: ' . $response_code);
-        error_log('[ZOHO_INTEGRATION] Create list response body: ' . $response_body);
+        $this->debug_log('Create list response code: ' . $response_code);
+        $this->debug_log('Create list response body: ' . $response_body);
         
         if ($response_code == 200) {
             $response_data = json_decode($response_body, true);
             if (isset($response_data['code']) && $response_data['code'] == '0' && isset($response_data['listkey'])) {
-                error_log('[ZOHO_INTEGRATION] List created successfully with key: ' . $response_data['listkey']);
+                $this->debug_log('List created successfully with key: ' . $response_data['listkey']);
                 return $response_data['listkey'];
             }
         }
         
-        error_log('[ZOHO_INTEGRATION] Failed to create list');
+        $this->debug_log('Failed to create list');
         return false;
     }
     
@@ -559,12 +577,12 @@ class ZohoIntegration {
      */
     private function try_alternative_endpoints($campaigns_url, $access_token, $endpoints_to_try, $index) {
         if ($index >= count($endpoints_to_try)) {
-            error_log('[ZOHO_INTEGRATION] All endpoints failed');
+            $this->debug_log('All endpoints failed');
             return false;
         }
         
         $api_url = $campaigns_url . $endpoints_to_try[$index];
-        error_log('[ZOHO_INTEGRATION] Trying alternative endpoint: ' . $api_url);
+        $this->debug_log('Trying alternative endpoint: ' . $api_url);
         
         $headers = array(
             'Authorization' => 'Zoho-oauthtoken ' . $access_token,
@@ -572,7 +590,7 @@ class ZohoIntegration {
         );
         
         $api_params = array(
-            'listkey' => 'default', // Try with default listkey
+            'listkey' => 'default',
             'resfmt' => 'JSON'
         );
         
@@ -587,34 +605,32 @@ class ZohoIntegration {
         ));
         
         if (is_wp_error($response)) {
-            error_log('[ZOHO_INTEGRATION] Alternative endpoint request failed: ' . $response->get_error_message());
+            $this->debug_log('Alternative endpoint request failed: ' . $response->get_error_message());
             return $this->try_alternative_endpoints($campaigns_url, $access_token, $endpoints_to_try, $index + 1);
         }
         
         $response_code = wp_remote_retrieve_response_code($response);
         $response_body = wp_remote_retrieve_body($response);
         
-        error_log('[ZOHO_INTEGRATION] Alternative endpoint response code: ' . $response_code);
-        error_log('[ZOHO_INTEGRATION] Alternative endpoint response body: ' . $response_body);
+        $this->debug_log('Alternative endpoint response code: ' . $response_code);
+        $this->debug_log('Alternative endpoint response body: ' . $response_body);
         
         if ($response_code == 200) {
             $response_data = json_decode($response_body, true);
             if (isset($response_data['code']) && $response_data['code'] == '0') {
-                // Check different response structures
                 if (isset($response_data['list_of_details'])) {
-                    error_log('[ZOHO_INTEGRATION] Lists retrieved successfully from alternative endpoint');
+                    $this->debug_log('Lists retrieved successfully from alternative endpoint');
                     return $response_data['list_of_details'];
                 } elseif (isset($response_data['lists'])) {
-                    error_log('[ZOHO_INTEGRATION] Lists retrieved successfully from alternative endpoint');
+                    $this->debug_log('Lists retrieved successfully from alternative endpoint');
                     return $response_data['lists'];
                 } elseif (isset($response_data['list_details'])) {
-                    error_log('[ZOHO_INTEGRATION] Lists retrieved successfully from alternative endpoint');
+                    $this->debug_log('Lists retrieved successfully from alternative endpoint');
                     return $response_data['list_details'];
                 }
             }
         }
         
-        // Try next endpoint
         return $this->try_alternative_endpoints($campaigns_url, $access_token, $endpoints_to_try, $index + 1);
     }
 
@@ -622,26 +638,26 @@ class ZohoIntegration {
      * Add user to Zoho Campaigns list
      */
     public function add_user_to_zoho_list($user_id) {
-        error_log('[ZOHO_INTEGRATION] add_user_to_zoho_list called for user ID: ' . $user_id);
+        $this->debug_log('add_user_to_zoho_list called for user ID: ' . $user_id);
         
         // Get user data
         $user = get_user_by('ID', $user_id);
         if (!$user) {
-            error_log('[ZOHO_INTEGRATION] User not found with ID: ' . $user_id);
+            $this->debug_log('User not found with ID: ' . $user_id);
             return false;
         }
         
         // Get valid access token
         $access_token = $this->get_valid_access_token();
         if (!$access_token) {
-            error_log('[ZOHO_INTEGRATION] No valid access token available');
+            $this->debug_log('No valid access token available');
             return false;
         }
         
         // Get Zoho settings
         $zoho_settings = get_option('zoho_integration_settings', array());
         if (empty($zoho_settings['list_key'])) {
-            error_log('[ZOHO_INTEGRATION] List key not configured');
+            $this->debug_log('List key not configured');
             return false;
         }
         
@@ -652,11 +668,11 @@ class ZohoIntegration {
             'emailids' => $user->user_email
         );
         
-        $api_url = ZOHO_API_BASE_URL . 'addlistsubscribersinbulk?' . http_build_query($api_params);
+        $api_base_url = $this->get_api_base_url();
+        $api_url = $api_base_url . 'addlistsubscribersinbulk?' . http_build_query($api_params);
         
-        error_log('[ZOHO_INTEGRATION] API URL: ' . $api_url);
-        error_log('[ZOHO_INTEGRATION] API params: ' . print_r($api_params, true));
-        error_log('[ZOHO_INTEGRATION] Access token: ' . substr($access_token, 0, 20) . '...');
+        $this->debug_log('API URL: ' . $api_url);
+        $this->debug_log('Access token: ' . substr($access_token, 0, 20) . '...');
         
         $headers = array(
             'Authorization' => 'Zoho-oauthtoken ' . $access_token
@@ -672,27 +688,27 @@ class ZohoIntegration {
         ));
         
         if (is_wp_error($response)) {
-            error_log('[ZOHO_INTEGRATION] WP_Error: ' . $response->get_error_message());
+            $this->debug_log('WP_Error: ' . $response->get_error_message());
             return false;
         }
         
         $response_code = wp_remote_retrieve_response_code($response);
         $response_body = wp_remote_retrieve_body($response);
         
-        error_log('[ZOHO_INTEGRATION] Response code: ' . $response_code);
-        error_log('[ZOHO_INTEGRATION] Response body: ' . $response_body);
+        $this->debug_log('Response code: ' . $response_code);
+        $this->debug_log('Response body: ' . $response_body);
         
         if ($response_code == 200) {
             $response_data = json_decode($response_body, true);
             if (isset($response_data['code']) && $response_data['code'] == '0') {
-                error_log('[ZOHO_INTEGRATION] SUCCESS: User added to Zoho list');
+                $this->debug_log('SUCCESS: User added to Zoho list');
                 return true;
             } else {
-                error_log('[ZOHO_INTEGRATION] FAILED: ' . (isset($response_data['message']) ? $response_data['message'] : 'Unknown error'));
+                $this->debug_log('FAILED: ' . (isset($response_data['message']) ? $response_data['message'] : 'Unknown error'));
                 return false;
             }
         } else {
-            error_log('[ZOHO_INTEGRATION] FAILED: HTTP ' . $response_code);
+            $this->debug_log('FAILED: HTTP ' . $response_code);
             return false;
         }
     }
@@ -702,30 +718,20 @@ class ZohoIntegration {
      */
     public function get_authorization_url() {
         $zoho_settings = get_option('zoho_integration_settings', array());
-        $domain = isset($zoho_settings['domain']) ? $zoho_settings['domain'] : 'com';
-        $client_id = isset($zoho_settings['client_id']) ? $zoho_settings['client_id'] : $this->client_id;
+        $client_id = isset($zoho_settings['client_id']) ? $zoho_settings['client_id'] : '';
         
-        // Use correct Zoho Accounts URL format based on web search
-        $accounts_url = 'https://accounts.zoho.com/oauth/v2/auth';
-        if ($domain == 'ca') {
-            $accounts_url = 'https://accounts.zohocloud.ca/oauth/v2/auth';
-        }
-        
-        // Force Canada data center since app was created there
-        $accounts_url = 'https://accounts.zohocloud.ca/oauth/v2/auth';
-        
-        // Use simpler redirect URI
+        $accounts_url = $this->get_accounts_url() . 'auth';
         $redirect_uri = home_url('/zoho-callback');
         
         // Validate client_id
         if (empty($client_id)) {
-            error_log('[ZOHO_INTEGRATION] Client ID is empty');
+            $this->debug_log('Client ID is empty');
             return false;
         }
         
-        error_log('[ZOHO_INTEGRATION] Client ID: ' . $client_id);
-        error_log('[ZOHO_INTEGRATION] Redirect URI: ' . $redirect_uri);
-        error_log('[ZOHO_INTEGRATION] Accounts URL: ' . $accounts_url);
+        $this->debug_log('Client ID: ' . substr($client_id, 0, 10) . '...');
+        $this->debug_log('Redirect URI: ' . $redirect_uri);
+        $this->debug_log('Accounts URL: ' . $accounts_url);
         
         $auth_params = array(
             'client_id' => $client_id,
@@ -736,13 +742,8 @@ class ZohoIntegration {
             'state' => 'zoho_oauth'
         );
         
-        error_log('[ZOHO_INTEGRATION] Auth params: ' . print_r($auth_params, true));
-        
-        $query_string = http_build_query($auth_params);
-        error_log('[ZOHO_INTEGRATION] Query string: ' . $query_string);
-        
-        $auth_url = $accounts_url . '?' . $query_string;
-        error_log('[ZOHO_INTEGRATION] Generated auth URL: ' . $auth_url);
+        $auth_url = $accounts_url . '?' . http_build_query($auth_params);
+        $this->debug_log('Generated auth URL: ' . $auth_url);
         
         return $auth_url;
     }
@@ -752,20 +753,10 @@ class ZohoIntegration {
      */
     public function handle_authorization_callback($code) {
         $zoho_settings = get_option('zoho_integration_settings', array());
-        $domain = isset($zoho_settings['domain']) ? $zoho_settings['domain'] : 'com';
-        $client_id = isset($zoho_settings['client_id']) ? $zoho_settings['client_id'] : $this->client_id;
-        $client_secret = isset($zoho_settings['client_secret']) ? $zoho_settings['client_secret'] : $this->client_secret;
+        $client_id = isset($zoho_settings['client_id']) ? $zoho_settings['client_id'] : '';
+        $client_secret = isset($zoho_settings['client_secret']) ? $zoho_settings['client_secret'] : '';
         
-        // Use correct Zoho Accounts URL format based on web search
-        $accounts_url = 'https://accounts.zohocloud.ca/oauth/v2/token';
-        if ($domain == 'ca') {
-            $accounts_url = 'https://accounts.zohocloud.ca/oauth/v2/token';
-        }
-        
-        // Force Canada data center since app was created there
-        $accounts_url = 'https://accounts.zohocloud.ca/oauth/v2/token';
-        
-        // Use simpler redirect URI
+        $accounts_url = $this->get_accounts_url() . 'token';
         $redirect_uri = home_url('/zoho-callback');
         
         $token_params = array(
@@ -776,8 +767,7 @@ class ZohoIntegration {
             'redirect_uri' => $redirect_uri
         );
         
-        error_log('[ZOHO_INTEGRATION] Token request URL: ' . $accounts_url);
-        error_log('[ZOHO_INTEGRATION] Token params: ' . print_r($token_params, true));
+        $this->debug_log('Token request URL: ' . $accounts_url);
         
         $response = wp_remote_post($accounts_url, array(
             'method' => 'POST',
@@ -789,7 +779,7 @@ class ZohoIntegration {
         ));
         
         if (is_wp_error($response)) {
-            error_log('[ZOHO_INTEGRATION] Token request error: ' . $response->get_error_message());
+            $this->debug_log('Token request error: ' . $response->get_error_message());
             return false;
         }
         
@@ -801,12 +791,12 @@ class ZohoIntegration {
             if (isset($token_data['access_token'])) {
                 $token_data['req_time'] = time();
                 update_option('zoho_token_data', $token_data);
-                error_log('[ZOHO_INTEGRATION] Access token saved successfully');
+                $this->debug_log('Access token saved successfully');
                 return true;
             }
         }
         
-        error_log('[ZOHO_INTEGRATION] Failed to get access token: ' . $response_body);
+        $this->debug_log('Failed to get access token: ' . $response_body);
         return false;
     }
     
@@ -989,16 +979,16 @@ class ZohoIntegration {
      * Test function for manual testing
      */
     public function test_add_user($user_id) {
-        error_log('[ZOHO_INTEGRATION] ========== TEST ADD USER ' . $user_id . ' ==========');
+        $this->debug_log('========== TEST ADD USER ' . $user_id . ' ==========');
         $result = $this->add_user_to_zoho_list($user_id);
-        error_log('[ZOHO_INTEGRATION] Test result: ' . ($result ? 'SUCCESS' : 'FAILED'));
-        error_log('[ZOHO_INTEGRATION] ========== TEST COMPLETED ==========');
+        $this->debug_log('Test result: ' . ($result ? 'SUCCESS' : 'FAILED'));
+        $this->debug_log('========== TEST COMPLETED ==========');
         return $result;
     }
 }
 
-// Initialize the plugin
-new ZohoIntegration();
+// Initialize the plugin (singleton to avoid duplicate hook registration)
+$GLOBALS['zoho_integration'] = ZohoIntegration::get_instance();
 
 // Admin settings page
 add_action('admin_menu', 'zoho_integration_admin_menu');
@@ -1021,7 +1011,15 @@ function zoho_integration_admin_menu() {
 }
 
 function zoho_integration_admin_page() {
+    // Get the singleton instance
+    $zoho = ZohoIntegration::get_instance();
+    
     if (isset($_POST['submit'])) {
+        // Verify nonce and capability
+        if (!isset($_POST['zoho_settings_nonce']) || !wp_verify_nonce($_POST['zoho_settings_nonce'], 'zoho_save_settings') || !current_user_can('manage_options')) {
+            wp_die('Security check failed.');
+        }
+        
         $settings = array(
             'list_key' => sanitize_text_field($_POST['list_key']),
             'domain' => sanitize_text_field($_POST['domain']),
@@ -1037,7 +1035,11 @@ function zoho_integration_admin_page() {
     }
     
     if (isset($_POST['authorize'])) {
-        $zoho = new ZohoIntegration();
+        // Verify nonce and capability
+        if (!isset($_POST['zoho_auth_nonce']) || !wp_verify_nonce($_POST['zoho_auth_nonce'], 'zoho_authorize') || !current_user_can('manage_options')) {
+            wp_die('Security check failed.');
+        }
+        
         $auth_url = $zoho->get_authorization_url();
         
         if ($auth_url === false) {
@@ -1055,22 +1057,31 @@ function zoho_integration_admin_page() {
         } elseif ($_GET['oauth'] == 'error') {
             echo '<div class="notice notice-error"><p>Authorization failed. Please try again.</p></div>';
             
-            // Debug information
+            // Debug information — redact sensitive token data
             echo '<div class="notice notice-info">';
             echo '<h4>Debug Information:</h4>';
             echo '<p><strong>Current Settings:</strong></p>';
             $settings = get_option('zoho_integration_settings', array());
             echo '<ul>';
-            echo '<li>Client ID: ' . (isset($settings['client_id']) ? $settings['client_id'] : 'Not set') . '</li>';
-            echo '<li>Client Secret: ' . (isset($settings['client_secret']) ? 'Set' : 'Not set') . '</li>';
-            echo '<li>Domain: ' . (isset($settings['domain']) ? $settings['domain'] : 'com') . '</li>';
-            echo '<li>List Key: ' . (isset($settings['list_key']) ? $settings['list_key'] : 'Not set') . '</li>';
+            echo '<li>Client ID: ' . (isset($settings['client_id']) && $settings['client_id'] ? substr($settings['client_id'], 0, 10) . '...' : 'Not set') . '</li>';
+            echo '<li>Client Secret: ' . (isset($settings['client_secret']) && $settings['client_secret'] ? 'Set (hidden)' : 'Not set') . '</li>';
+            echo '<li>Domain: ' . esc_html(isset($settings['domain']) ? $settings['domain'] : 'com') . '</li>';
+            echo '<li>List Key: ' . (isset($settings['list_key']) && $settings['list_key'] ? esc_html($settings['list_key']) : 'Not set') . '</li>';
             echo '</ul>';
             
             echo '<p><strong>Token Data:</strong></p>';
             $token_data = get_option('zoho_token_data', array());
             if (!empty($token_data)) {
-                echo '<pre>' . print_r($token_data, true) . '</pre>';
+                // Redact sensitive fields
+                $safe_data = array();
+                foreach ($token_data as $key => $value) {
+                    if (in_array($key, array('access_token', 'refresh_token', 'client_secret'))) {
+                        $safe_data[$key] = substr($value, 0, 10) . '...(redacted)';
+                    } else {
+                        $safe_data[$key] = $value;
+                    }
+                }
+                echo '<pre>' . esc_html(print_r($safe_data, true)) . '</pre>';
             } else {
                 echo '<p>No token data found.</p>';
             }
@@ -1083,6 +1094,7 @@ function zoho_integration_admin_page() {
     <div class="wrap zoho-integration-admin">
         <h1>Zoho Integration Settings</h1>
         <form method="post" action="">
+            <?php wp_nonce_field('zoho_save_settings', 'zoho_settings_nonce'); ?>
             <table class="form-table">
                 <tr>
                     <th scope="row">Client ID</th>
@@ -1098,7 +1110,6 @@ function zoho_integration_admin_page() {
                         <select id="list_key" name="list_key" class="regular-text">
                             <option value="">-- Select a list --</option>
                             <?php
-                            $zoho = new ZohoIntegration();
                             $lists = $zoho->get_zoho_lists();
                             if ($lists && is_array($lists)) {
                                 foreach ($lists as $list) {
@@ -1168,6 +1179,7 @@ function zoho_integration_admin_page() {
         
         <h2>OAuth Authorization</h2>
         <form method="post" action="" id="zoho-auth-form">
+            <?php wp_nonce_field('zoho_authorize', 'zoho_auth_nonce'); ?>
             <p>Click the button below to authorize with Zoho Campaigns. This will open a new window for OAuth authorization.</p>
             <button type="button" id="zoho-authorize-btn" class="button button-secondary">Authorize with Zoho</button>
         </form>
@@ -1196,16 +1208,16 @@ function zoho_integration_admin_page() {
         <?php
         // Only show debug sections if debug is enabled
         $settings = get_option('zoho_integration_settings', array());
+        // Generate the OAuth URL for use by the authorize button (always, not just debug mode)
+        $oauth_url = $zoho->get_authorization_url();
+        
         if (isset($settings['enable_debug']) && $settings['enable_debug']) {
         ?>
         <h3>Debug Information</h3>
         <?php
-        $zoho = new ZohoIntegration();
-        $debug_url = $zoho->get_authorization_url();
-        if ($debug_url) {
-            echo '<p><strong>Generated OAuth URL (Canada Data Center):</strong><br>';
-            echo '<a href="' . esc_url($debug_url) . '" target="_blank">' . esc_html($debug_url) . '</a></p>';
-            echo '<p><em>This URL uses Canada data center (zohocloud.ca) to match your app.</em></p>';
+        if ($oauth_url) {
+            echo '<p><strong>Generated OAuth URL:</strong><br>';
+            echo '<a href="' . esc_url($oauth_url) . '" target="_blank">' . esc_html($oauth_url) . '</a></p>';
         } else {
             echo '<p><strong>Error:</strong> Could not generate authorization URL. Check Client ID and Client Secret.</p>';
         }
@@ -1239,21 +1251,19 @@ function zoho_integration_admin_page() {
         }
         
         document.getElementById('zoho-authorize-btn').addEventListener('click', function() {
-            // Get the current OAuth URL from the debug section
-            var oauthLink = document.querySelector('a[href*="accounts.zohocloud.ca"]');
-            if (oauthLink) {
-                // Open the correct OAuth URL directly
-                window.open(oauthLink.href, '_blank');
-            } else {
-                // Fallback to form submission
-                var form = document.getElementById('zoho-auth-form');
-                var input = document.createElement('input');
-                input.type = 'hidden';
-                input.name = 'authorize';
-                input.value = '1';
-                form.appendChild(input);
-                form.submit();
-            }
+            <?php if ($oauth_url) : ?>
+            // Use the pre-generated OAuth URL from PHP
+            window.open('<?php echo esc_url($oauth_url); ?>', '_blank');
+            <?php else : ?>
+            // No OAuth URL available — submit the form to trigger server-side generation
+            var form = document.getElementById('zoho-auth-form');
+            var input = document.createElement('input');
+            input.type = 'hidden';
+            input.name = 'authorize';
+            input.value = '1';
+            form.appendChild(input);
+            form.submit();
+            <?php endif; ?>
         });
         
         // Refresh lists button
@@ -1330,6 +1340,7 @@ function zoho_integration_admin_page() {
         <div class="test-section">
             <h2>Test Integration</h2>
             <form method="post" action="">
+                <?php wp_nonce_field('zoho_test_user', 'zoho_test_nonce'); ?>
                 <input type="hidden" name="test_user" value="1" />
                 <p>
                     <label>Test User ID: <input type="number" name="test_user_id" value="78805" /></label>
@@ -1340,8 +1351,12 @@ function zoho_integration_admin_page() {
         
         <?php
         if (isset($_POST['test_user'])) {
+            // Verify nonce and capability
+            if (!isset($_POST['zoho_test_nonce']) || !wp_verify_nonce($_POST['zoho_test_nonce'], 'zoho_test_user') || !current_user_can('manage_options')) {
+                wp_die('Security check failed.');
+            }
+            
             $test_user_id = intval($_POST['test_user_id']);
-            $zoho = new ZohoIntegration();
             $result = $zoho->test_add_user($test_user_id);
             echo '<div class="notice notice-info"><p>Test completed. Check debug logs for details.</p></div>';
         }
